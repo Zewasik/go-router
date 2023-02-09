@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"regexp"
+	"strings"
 )
 
 type route struct {
@@ -24,6 +25,8 @@ type Router struct {
 // regexp example -> https://regex101.com/r/84S9iL/1
 func (router *Router) NewRoute(method, regexpString string, handler http.HandlerFunc) {
 	regex := regexp.MustCompile("^" + regexpString + "$")
+	method = strings.ToUpper(method)
+
 	router.routes = append(router.routes, route{
 		method,
 		regex,
@@ -36,15 +39,15 @@ func (router *Router) NewRoute(method, regexpString string, handler http.Handler
 // When matched, regular expression groups are used as key value pairs
 // accessible in handler's context via GetField function
 func (router *Router) Serve(w http.ResponseWriter, r *http.Request) {
-	for _, v := range router.routes {
-		match := v.regex.FindStringSubmatch(r.URL.Path)
+	for _, route := range router.routes {
+		match := route.regex.FindStringSubmatch(r.URL.Path)
 		if len(match) > 0 {
-			if r.Method != v.method {
+			if strings.ToUpper(r.Method) != route.method {
 				w.WriteHeader(http.StatusMethodNotAllowed)
 				return
 			}
 			matchMap := make(map[string]string)
-			groupName := v.regex.SubexpNames()
+			groupName := route.regex.SubexpNames()
 
 			// map group name(key) to submatched result
 			// these arrays have one to one relationship
@@ -52,7 +55,7 @@ func (router *Router) Serve(w http.ResponseWriter, r *http.Request) {
 				matchMap[groupName[i]] = match[i]
 			}
 			ctx := context.WithValue(r.Context(), struct{}{}, matchMap)
-			v.handler(w, r.WithContext(ctx))
+			route.handler(w, r.WithContext(ctx))
 			return
 		}
 	}

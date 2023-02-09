@@ -9,7 +9,7 @@ import (
 
 func main() {
 	r := router.Router{}
-	r.NewRoute("GET", `/home/(?P<id>\d+)`, controllers.Home)
+	r.NewRoute("get", `/home/(?P<id>\d+)`, controllers.Home)
 	r.NewRoute("GET", `.*`, controllers.NotFound)
 
 	http.HandleFunc("/", r.Serve)
