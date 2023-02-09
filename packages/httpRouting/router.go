@@ -1,4 +1,4 @@
-package router
+package httpRouting
 
 import (
 	"context"
@@ -13,8 +13,14 @@ type route struct {
 	handler http.HandlerFunc
 }
 
-type Router struct {
-	routes []route
+type router struct {
+	routes map[string][]route
+}
+
+func NewRouter() *router {
+	return &router{
+		routes: map[string][]route{},
+	}
 }
 
 // NewRouter creates new route and appends it to Router,
@@ -23,11 +29,11 @@ type Router struct {
 // parsed value will be accessable through handler's context via GetField function
 //
 // regexp example -> https://regex101.com/r/84S9iL/1
-func (router *Router) NewRoute(method, regexpString string, handler http.HandlerFunc) {
+func (r *router) NewRoute(method, regexpString string, handler http.HandlerFunc) {
 	regex := regexp.MustCompile("^" + regexpString + "$")
 	method = strings.ToUpper(method)
 
-	router.routes = append(router.routes, route{
+	r.routes[method] = append(r.routes[method], route{
 		method,
 		regex,
 		handler,
@@ -38,14 +44,10 @@ func (router *Router) NewRoute(method, regexpString string, handler http.Handler
 //
 // When matched, regular expression groups are used as key value pairs
 // accessible in handler's context via GetField function
-func (router *Router) Serve(w http.ResponseWriter, r *http.Request) {
-	for _, route := range router.routes {
-		match := route.regex.FindStringSubmatch(r.URL.Path)
+func (r *router) Serve(w http.ResponseWriter, req *http.Request) {
+	for _, route := range r.routes[strings.ToUpper(req.Method)] {
+		match := route.regex.FindStringSubmatch(req.URL.Path)
 		if len(match) > 0 {
-			if strings.ToUpper(r.Method) != route.method {
-				w.WriteHeader(http.StatusMethodNotAllowed)
-				return
-			}
 			matchMap := make(map[string]string)
 			groupName := route.regex.SubexpNames()
 
@@ -54,8 +56,8 @@ func (router *Router) Serve(w http.ResponseWriter, r *http.Request) {
 			for i := 1; i < len(match); i++ {
 				matchMap[groupName[i]] = match[i]
 			}
-			ctx := context.WithValue(r.Context(), struct{}{}, matchMap)
-			route.handler(w, r.WithContext(ctx))
+			ctx := context.WithValue(req.Context(), struct{}{}, matchMap)
+			route.handler(w, req.WithContext(ctx))
 			return
 		}
 	}

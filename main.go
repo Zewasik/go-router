@@ -2,13 +2,14 @@ package main
 
 import (
 	"go-router/packages/controllers"
-	"go-router/packages/router"
+	"go-router/packages/httpRouting"
 	"log"
 	"net/http"
 )
 
 func main() {
-	r := router.Router{}
+	r := httpRouting.NewRouter()
+
 	r.NewRoute("get", `/home/(?P<id>\d+)`, controllers.Home)
 	r.NewRoute("GET", `.*`, controllers.NotFound)
 
