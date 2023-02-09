@@ -1,12 +1,12 @@
 package controllers
 
 import (
-	"go-router/packages/router"
+	"go-router/packages/httpRouting"
 	"net/http"
 )
 
 func Home(w http.ResponseWriter, r *http.Request) {
-	id := router.GetField(r, "id")
+	id := httpRouting.GetField(r, "id")
 
 	w.Write([]byte("Home page, id: " + id))
 }
