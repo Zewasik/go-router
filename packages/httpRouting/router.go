@@ -67,5 +67,8 @@ func (r *router) Serve(w http.ResponseWriter, req *http.Request) {
 // Gets key value pairs from matched URL variables
 func GetField(r *http.Request, name string) (string, error) {
 	fields := r.Context().Value(struct{}{}).(map[string]string)
-	return fields[name], fmt.Errorf("no such variable in request: %v", name)
+	if f, exist := fields[name]; exist {
+		return f, nil
+	}
+	return "", fmt.Errorf("no such variable in request: %v", name)
 }
