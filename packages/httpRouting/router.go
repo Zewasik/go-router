@@ -9,7 +9,6 @@ import (
 )
 
 type route struct {
-	method  string
 	regex   *regexp.Regexp
 	handler http.HandlerFunc
 }
@@ -35,7 +34,6 @@ func (r *router) NewRoute(method, regexpString string, handler http.HandlerFunc)
 	method = strings.ToUpper(method)
 
 	r.routes[method] = append(r.routes[method], route{
-		method,
 		regex,
 		handler,
 	})
@@ -46,6 +44,22 @@ func (r *router) NewRoute(method, regexpString string, handler http.HandlerFunc)
 // When matched, regular expression groups are used as key value pairs
 // accessible in handler's context via GetField function
 func (r *router) Serve(w http.ResponseWriter, req *http.Request) {
+	r.serve(w, req)
+}
+
+func (r *router) ServeWithCORS(w http.ResponseWriter, req *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
+	w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token")
+
+	if req.Method == "OPTIONS" {
+		return
+	}
+
+	r.serve(w, req)
+}
+
+func (r *router) serve(w http.ResponseWriter, req *http.Request) {
 	for _, route := range r.routes[strings.ToUpper(req.Method)] {
 		match := route.regex.FindStringSubmatch(req.URL.Path)
 		if len(match) > 0 {
