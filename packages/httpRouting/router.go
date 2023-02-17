@@ -17,6 +17,13 @@ type router struct {
 	routes map[string][]route
 }
 
+type CORS struct {
+	Origin      string
+	Methods     []string
+	Headers     []string
+	Credentials bool
+}
+
 func NewRouter() *router {
 	return &router{
 		routes: map[string][]route{},
@@ -47,16 +54,33 @@ func (r *router) Serve(w http.ResponseWriter, req *http.Request) {
 	r.serve(w, req)
 }
 
-func (r *router) ServeWithCORS(w http.ResponseWriter, req *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
-	w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
-	w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token")
-
-	if req.Method == "OPTIONS" {
-		return
+// Same usage as in Serve function, but also adds specified CORS headers
+func (r *router) ServeWithCORS(c CORS) http.HandlerFunc {
+	headers := make(map[string]string)
+	if c.Origin != "" {
+		headers["Access-Control-Allow-Origin"] = c.Origin
+	}
+	if len(c.Methods) > 0 {
+		headers["Access-Control-Allow-Methods"] = strings.Join(c.Methods, ", ")
+	}
+	if len(c.Headers) > 0 {
+		headers["Access-Control-Allow-Headers"] = strings.Join(c.Headers, ", ")
+	}
+	if c.Credentials {
+		headers["Access-Control-Allow-Credentials"] = "true"
 	}
 
-	r.serve(w, req)
+	return func(w http.ResponseWriter, req *http.Request) {
+		for header, value := range headers {
+			w.Header().Set(header, value)
+		}
+
+		if req.Method == "OPTIONS" {
+			return
+		}
+
+		r.serve(w, req)
+	}
 }
 
 func (r *router) serve(w http.ResponseWriter, req *http.Request) {
