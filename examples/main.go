@@ -1,10 +1,10 @@
 package main
 
 import (
-	"go-router/controllers"
-	"go-router/packages/httpRouting"
 	"log"
 	"net/http"
+
+	httpRouting "github.com/Zewasik/go-router"
 )
 
 func main() {
@@ -16,8 +16,8 @@ func main() {
 		Credentials: true,
 	}
 
-	r.NewRoute("get", `/home/(?P<id>\d+)`, controllers.Home)
-	r.NewRoute("GET", `.*`, controllers.NotFound)
+	r.NewRoute("get", `/home/(?P<id>\d+)`, Home)
+	r.NewRoute("GET", `.*`, NotFound)
 
 	http.HandleFunc("/", r.ServeWithCORS(c))
 
@@ -25,4 +25,20 @@ func main() {
 	log.Println("To stop the server press `Ctrl + C`")
 
 	log.Fatal(http.ListenAndServe(":8080", nil))
+}
+
+func Home(w http.ResponseWriter, r *http.Request) {
+	id, err := httpRouting.GetFieldString(r, "id")
+	if err != nil {
+		log.Println(err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.Write([]byte("Home page, id: " + id))
+}
+
+func NotFound(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotFound)
+	w.Write([]byte("Page not found"))
 }
