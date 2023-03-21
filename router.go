@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -102,11 +103,32 @@ func (r *router) serve(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-// Gets key value pairs from matched URL variables
-func GetField(r *http.Request, name string) (string, error) {
-	fields := r.Context().Value(struct{}{}).(map[string]string)
-	if f, exist := fields[name]; exist {
-		return f, nil
+// Returns the string value of the given key from matched URL variables
+func GetFieldString(r *http.Request, name string) (string, error) {
+	fields, ok := r.Context().Value(struct{}{}).(map[string]string)
+	if !ok {
+		return "", fmt.Errorf("internal error: no fileds in context")
 	}
-	return "", fmt.Errorf("no such variable in request: %v", name)
+
+	field, exist := fields[name]
+	if !exist {
+		return "", fmt.Errorf("no such variable in request: %v", name)
+	}
+
+	return field, nil
+}
+
+// Returns the integer value of the given key from matched URL variables
+func GetFieldInt(r *http.Request, name string) (int, error) {
+	field, err := GetFieldString(r, name)
+	if err != nil {
+		return 0, err
+	}
+
+	fieldInt, err := strconv.Atoi(field)
+	if err != nil {
+		return 0, err
+	}
+
+	return fieldInt, nil
 }
