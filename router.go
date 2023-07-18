@@ -9,26 +9,47 @@ import (
 	"strings"
 )
 
-type route struct {
-	regex   *regexp.Regexp
-	handler http.HandlerFunc
-}
-
 type router struct {
-	routes map[string][]route
+	routes      map[string][]route
+	corsHeaders map[string]string
 }
 
-type CORS struct {
-	Origin      string
-	Methods     []string
-	Headers     []string
-	Credentials bool
-}
+type ContextKey string
 
-func NewRouter() *router {
+func NewRouterBuilder() *router {
 	return &router{
-		routes: map[string][]route{},
+		routes:      make(map[string][]route),
+		corsHeaders: make(map[string]string),
 	}
+}
+
+func (r *router) SetAllowOrigin(o string) *router {
+	o = strings.TrimSpace(o)
+	if o != "" {
+		r.corsHeaders["Access-Control-Allow-Origin"] = o
+	}
+	return r
+}
+
+func (r *router) SetAllowMethods(m []string) *router {
+	if len(m) > 0 {
+		r.corsHeaders["Access-Control-Allow-Methods"] = strings.Join(m, ", ")
+	}
+	return r
+}
+
+func (r *router) SetAllowHeaders(h []string) *router {
+	if len(h) > 0 {
+		r.corsHeaders["Access-Control-Allow-Headers"] = strings.Join(h, ", ")
+	}
+	return r
+}
+
+func (r *router) SetCredantials(c bool) *router {
+	if c {
+		r.corsHeaders["Access-Control-Allow-Credentials"] = "true"
+	}
+	return r
 }
 
 // NewRouter creates new route and appends it to Router,
@@ -37,13 +58,15 @@ func NewRouter() *router {
 // parsed value will be accessable through handler's context via GetField function
 //
 // regexp example -> https://regex101.com/r/84S9iL/1
-func (r *router) NewRoute(method, regexpString string, handler http.HandlerFunc) {
+func (r *router) NewRoute(method, regexpString string, handler http.HandlerFunc, middlewareBefore ...Middleware) {
 	regex := regexp.MustCompile("^" + regexpString + "$")
 	method = strings.ToUpper(method)
 
 	r.routes[method] = append(r.routes[method], route{
 		regex,
 		handler,
+		middlewareBefore,
+		make([]Middleware, 0),
 	})
 }
 
@@ -56,23 +79,9 @@ func (r *router) Serve(w http.ResponseWriter, req *http.Request) {
 }
 
 // Same usage as in Serve function, but also adds specified CORS headers
-func (r *router) ServeWithCORS(c CORS) http.HandlerFunc {
-	headers := make(map[string]string)
-	if c.Origin != "" {
-		headers["Access-Control-Allow-Origin"] = c.Origin
-	}
-	if len(c.Methods) > 0 {
-		headers["Access-Control-Allow-Methods"] = strings.Join(c.Methods, ", ")
-	}
-	if len(c.Headers) > 0 {
-		headers["Access-Control-Allow-Headers"] = strings.Join(c.Headers, ", ")
-	}
-	if c.Credentials {
-		headers["Access-Control-Allow-Credentials"] = "true"
-	}
-
+func (r *router) ServeWithCORS() http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
-		for header, value := range headers {
+		for header, value := range r.corsHeaders {
 			w.Header().Set(header, value)
 		}
 
@@ -96,16 +105,25 @@ func (r *router) serve(w http.ResponseWriter, req *http.Request) {
 			for i := 1; i < len(match); i++ {
 				matchMap[groupName[i]] = match[i]
 			}
-			ctx := context.WithValue(req.Context(), struct{}{}, matchMap)
-			route.handler(w, req.WithContext(ctx))
+			ctx := context.WithValue(req.Context(), ContextKey("requestParams"), matchMap)
+			req = req.WithContext(ctx)
+
+			handler := route.handler
+			for i := len(route.middlewareBefore) - 1; i >= 0; i-- {
+				handler = route.middlewareBefore[i](handler)
+			}
+
+			handler.ServeHTTP(w, req)
 			return
 		}
 	}
+
+	w.WriteHeader(http.StatusNotFound)
 }
 
 // Returns the string value of the given key from matched URL variables
-func GetFieldString(r *http.Request, name string) (string, error) {
-	fields, ok := r.Context().Value(struct{}{}).(map[string]string)
+func GetRequestParamString(r *http.Request, name string) (string, error) {
+	fields, ok := r.Context().Value(ContextKey("requestParams")).(map[string]string)
 	if !ok {
 		return "", fmt.Errorf("internal error: no fileds in context")
 	}
@@ -119,8 +137,8 @@ func GetFieldString(r *http.Request, name string) (string, error) {
 }
 
 // Returns the integer value of the given key from matched URL variables
-func GetFieldInt(r *http.Request, name string) (int, error) {
-	field, err := GetFieldString(r, name)
+func GetRequestParamInt(r *http.Request, name string) (int, error) {
+	field, err := GetRequestParamString(r, name)
 	if err != nil {
 		return 0, err
 	}
